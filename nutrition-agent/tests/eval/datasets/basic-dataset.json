@@ -1,0 +1,18 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "format_notacja_polska",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "OWB1 + GR + 12x(Przeb.) + GS\nR: 14km\nSilownia\n3 km (w tym Podbiegi: 3 km rozgrzewki, 8x 150m dynamicznie pod górkę, powrót w dół w truchcie, reszta schłodzenie)\n\n\nOWB1 + GS\nR: 8km\nOWB1 + GS\nR: 20km\nZele + WODA"}]
+      }
+    },
+    {
+      "eval_case_id": "format_tabelaryczny",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "Dzień\tTyp treningu\tDystans\tOpis jednostki\tDocelowe tempo\nPoniedziałek\tOdpoczynek\t0 km\tWolne / Regeneracja lub lekki stretching (15 min).\t-\nWtorek\tInterwały\t11 km\t3 km rozgrzewki + 6 x 800m z 400m truchtu + 2 km schłodzenia.\t5:00 - 5:10 min/km\nŚroda\tBieg spokojny\t10 km\tBieg regeneracyjny, niska intensywność (Strefa 2).\t6:15 - 6:30 min/km\nCzwartek\tBieg progowy\t12 km\t3 km rozgrzewki + 6 km w tempie maratońskim + 3 km schłodzenia.\t5:40 - 5:45 min/km\nPiątek\tOdpoczynek\t0 km\tCałkowity odpoczynek lub rolowanie.\t-\nSobota\tBieg spokojny\t5 km\tKrótki rozruch, na koniec 4 x 100m przebieżki (Rytmy).\t6:15 - 6:30 min/km\nNiedziela\tWybieganie\t24 km\tBieg długi. Dobre nawodnienie i testowanie żeli energetycznych.\t6:15 - 6:25 min/km"}]
+      }
+    }
+  ]
+}
