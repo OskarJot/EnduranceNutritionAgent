@@ -5,7 +5,6 @@ from .agents import agent_czytnik, agent_dietetyk, agent_trener
 from .nodes import (
     dobierz_ubior,
     parsuj_plik_jesli_podano,
-    pobierz_makro_produktow,
     pobierz_pogode,
 )
 
@@ -17,8 +16,7 @@ root_agent = Workflow(
         (agent_czytnik,            agent_trener),              # LLM: kalkulacja kcal
         (agent_trener,             pobierz_pogode),            # API: Open-Meteo
         (pobierz_pogode,           dobierz_ubior),             # deterministyczny: ubiór
-        (dobierz_ubior,            pobierz_makro_produktow),   # API: OpenFoodFacts
-        (pobierz_makro_produktow,  agent_dietetyk),            # LLM: plan żywieniowy
+        (dobierz_ubior,            agent_dietetyk),            # LLM + MCP: plan żywieniowy
     ],
 )
 

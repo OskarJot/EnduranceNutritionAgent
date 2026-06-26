@@ -1,0 +1,6 @@
+services:
+  mcp-opennutrition:
+    image: deadletterq/mcp-opennutrition
+    ports:
+      - "9113:3000"
+    restart: unless-stopped

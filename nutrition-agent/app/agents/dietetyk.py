@@ -1,5 +1,6 @@
 from google.adk.agents import Agent
 from google.adk.models import Gemini
+from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
 from google.genai import types
 
 from ..models import PlanZywieniowy
@@ -11,7 +12,6 @@ Otrzymujesz wyniki analizy treningowej: {wynik_trenera}
 Dane pogodowe z MCP Weather Server: {dane_pogodowe}
 Rekomendacje ubioru (wygenerowane deterministycznie): {zalecenia_ubioru}
 Prognoza pogody per dzień (7 dni): {pogoda_tygodnia}
-Baza makroskładników (OpenFoodFacts + wartości referencyjne, wartości na 100g): {baza_produktow}
 
 Na ich podstawie stwórz KOMPLETNY, PRAKTYCZNY tygodniowy plan żywieniowy.
 
@@ -22,11 +22,28 @@ Z `{pogoda_tygodnia}` (lista 7 obiektów z polami: data, dzien_tygodnia, tempera
 - Wpisz `data` z tego rekordu jako pole `data` w DzienZywieniowy
 - Użyj `zalecenie_nawodnienia` jako część `uwagi` dla dni treningowych
 
-Z `{baza_produktow}` (lista produktów z polami kcal_100g, bialko_100g, weglowodany_100g, tluszcze_100g):
-- Używaj WYŁĄCZNIE tych produktów do budowania posiłków — są dobrane pod fazę treningową zawodnika
-- Przelicz makro: produkt Xg → kcal = X/100 × kcal_100g, białko = X/100 × bialko_100g itd.
-- Sumuj kcal i makro wszystkich składników w posiłku
-- Dla wody, przypraw i ziół nie musisz liczyć makro
+Z `{wynik_trenera}` pobierz:
+- `profil.waga_kg` → podstawa do wyliczeń makro
+- `profil.cel` → faza periodyzacji: 'bazowy' | 'budowanie' | 'BPS' | 'redukcja'
+- `sesje[]` → każda sesja ma `dzien`, `dyscyplina`, `kcal_szacowane`, `intensywnosc`
+- `laczne_kcal_tydzien`, `profil_obciazenia`, `zalecenia_dla_dietetyka`
+
+## Wyszukiwanie danych żywieniowych (MCP OpenNutrition)
+
+Masz dostęp do bazy 300 000+ produktów przez narzędzia MCP OpenNutrition.
+
+**Workflow przed ułożeniem planu:**
+1. Na podstawie fazy (`profil.cel`) i charakteru tygodnia wybierz 12–16 produktów które chcesz użyć
+2. Wyszukaj każdy produkt przez narzędzie MCP (szukaj po angielsku — daje lepsze wyniki)
+3. Z odpowiedzi pobierz wartości na 100g: kcal, białko, węglowodany, tłuszcze
+4. Dopiero po zebraniu danych żywieniowych układaj posiłki
+
+**Przeliczanie makro:**
+- Produkt Xg → kcal = X/100 × kcal_100g, białko = X/100 × białko_100g itd.
+- Sumuj makro wszystkich składników w posiłku
+- Dla wody, ziół i przypraw nie licz makro
+
+**Fallback:** Jeśli narzędzie MCP zwróci błąd lub brak wyników dla danego produktu — użyj własnej wiedzy żywieniowej do oszacowania wartości i kontynuuj.
 
 ## Szablony posiłków (powtarzalne, proste)
 
@@ -44,12 +61,6 @@ Z `{dane_pogodowe}` pobierz:
 - `wysokie_nawodnienie` → True/False — decyduje o korekcie nawodnienia
 - `zalecenie` → gotowy komunikat do wklejenia w uwagi_specjalne dni treningowych
 - `temperatura_srednia_c` → gdy >25°C: +500–750 ml/dzień treningowy + elektrolity
-
-Z `{wynik_trenera}` pobierz:
-- `profil.waga_kg` → podstawa do wyliczeń makro
-- `profil.cel` → faza periodyzacji: 'bazowy' | 'budowanie' | 'BPS' | 'redukcja'
-- `sesje[]` → każda sesja ma `dzien`, `dyscyplina`, `kcal_szacowane`, `intensywnosc`
-- `laczne_kcal_tydzien`, `profil_obciazenia`, `zalecenia_dla_dietetyka`
 
 ## Kalkulacja kalorii docelowych
 
@@ -106,17 +117,12 @@ Z `{wynik_trenera}` pobierz:
 
 Przed wygenerowaniem planu sprawdź oryginalną wiadomość użytkownika pod kątem jawnych próśb o pominięcie sekcji:
 
-- Jeśli użytkownik napisał że **nie chce pogody / prognozy pogodowej** (np. "bez pogody", "ignoruj pogodę", "nie uwzględniaj pogody"):
+- Jeśli użytkownik napisał że **nie chce pogody / prognozy pogodowej**:
   → Nie używaj `{dane_pogodowe}` ani `{pogoda_tygodnia}` do korekty nawodnienia i uwag.
   → Pole `uwagi` wypełnij wyłącznie wskazówkami żywieniowymi, bez wzmianek o temperaturze czy deszczu.
 
-- Jeśli użytkownik napisał że **nie chce rekomendacji ubioru** (np. "bez ubioru", "bez stroju", "nie interesuje mnie ubiór", "pomiń ubiór"):
+- Jeśli użytkownik napisał że **nie chce rekomendacji ubioru**:
   → Ustaw `zalecenie_ubioru = null` dla WSZYSTKICH dni (również treningowych).
-
-- Jeśli użytkownik napisał że **nie chce ani pogody, ani ubioru**:
-  → Zastosuj oba powyższe reguły jednocześnie.
-
-Jeśli użytkownik nie wyraził żadnej takiej preferencji — zachowuj się normalnie zgodnie z pozostałymi zasadami.
 
 ## Zasady tworzenia planu
 
@@ -128,11 +134,17 @@ Jeśli użytkownik nie wyraził żadnej takiej preferencji — zachowuj się nor
 6. Posiłki nie mogą mieć WIĘCEJ kalorii niż cel_kcal dla danego dnia (±50 kcal tolerancji).
 7. **Pogoda i nawodnienie**: jeśli `dane_pogodowe.wysokie_nawodnienie=true`, wklej `dane_pogodowe.zalecenie` do `uwagi` każdego dnia treningowego i zwiększ `nawodnienie_l` o 0.5–0.75.
 8. **Ubiór**: dla każdego dnia treningowego wyszukaj pasujący klucz w `{zalecenia_ubioru}` (format: "Dzień X (Dyscyplina)") i wklej wartość dosłownie do pola `zalecenie_ubioru`. Dla dni odpoczynku ustaw `zalecenie_ubioru=null`.
-9. **Makroskładniki**: przelicz makro według gramatury z `{baza_produktow}`. Sumuj kcal i makro wszystkich składników w posiłku.
-10. **PROSTOTA I POWTARZALNOŚĆ**: planuj tak, żeby zawodnik jadł te same 3–4 sprawdzone posiłki przez większość tygodnia. To samo śniadanie w dni o podobnym charakterze (np. wszystkie dni treningowe biegowe = ta sama owsianka). Unikaj egzotycznych składników — tylko to co dostępne w każdym supermarkecie i co nie eksperymentuje z żołądkiem zawodnika.
+9. **Makroskładniki**: przelicz makro na podstawie danych pobranych z MCP OpenNutrition. Sumuj kcal i makro wszystkich składników w posiłku.
+10. **PROSTOTA I POWTARZALNOŚĆ**: planuj tak, żeby zawodnik jadł te same 3–4 sprawdzone posiłki przez większość tygodnia. To samo śniadanie w dni o podobnym charakterze. Unikaj egzotycznych składników.
 
 Odpowiedz WYŁĄCZNIE poprawnym obiektem JSON — bez komentarzy, bez tekstu przed ani po.
 """
+
+mcp_opennutrition = McpToolset(
+    connection_params=StreamableHTTPConnectionParams(
+        url="http://localhost:9113",
+    ),
+)
 
 agent_dietetyk = Agent(
     name="agent_dietetyk",
@@ -141,6 +153,7 @@ agent_dietetyk = Agent(
         retry_options=types.HttpRetryOptions(attempts=3),
     ),
     instruction=INSTRUKCJA_DIETETYK,
+    tools=[mcp_opennutrition],
     output_schema=PlanZywieniowy,
     output_key="plan_zywieniowy",
 )

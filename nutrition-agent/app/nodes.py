@@ -7,7 +7,6 @@ from typing import Any, Optional
 from google.adk.events.event import Event
 
 from .models import DanePogodowe, PogodaDnia
-from .nutrition_data import FALLBACK_MAKRO, OFF_QUERY, PRODUKTY_BAZOWE, PRODUKTY_FAZY
 
 
 # ---------------------------------------------------------------------------
@@ -303,59 +302,3 @@ def dobierz_ubior(node_input: Any, pogoda_tygodnia: str, wynik_trenera: Any) -> 
         zalecenia[dzien_label] = f"[{data_dnia}] {rekomendacja}" if data_dnia else rekomendacja
 
     return Event(output=node_input, state={"zalecenia_ubioru": json.dumps(zalecenia, ensure_ascii=False)})
-
-
-# ---------------------------------------------------------------------------
-# Node 5 — baza produktów (OpenFoodFacts + fallback lokalny)
-# ---------------------------------------------------------------------------
-
-def pobierz_makro_produktow(node_input: Any, wynik_trenera: Any) -> Event:
-    """Pobiera makro z OpenFoodFacts; dobiera produkty wg fazy treningowej."""
-    trener = wynik_trenera if isinstance(wynik_trenera, dict) else json.loads(wynik_trenera)
-    faza   = trener.get("profil", {}).get("cel", "bazowy")
-
-    seen: set[str] = set()
-    produkty: list[str] = []
-    for nazwa in PRODUKTY_BAZOWE + PRODUKTY_FAZY.get(faza, PRODUKTY_FAZY["bazowy"]):
-        if nazwa not in seen:
-            seen.add(nazwa)
-            produkty.append(nazwa)
-
-    wyniki = []
-    for polska_nazwa in produkty:
-        makro = dict(FALLBACK_MAKRO.get(polska_nazwa, {}))
-        query = OFF_QUERY.get(polska_nazwa)
-        if query:
-            try:
-                url = (
-                    "https://world.openfoodfacts.org/cgi/search.pl"
-                    f"?search_terms={urllib.request.quote(query)}"
-                    "&json=true&action=process"
-                    "&fields=product_name,nutriments"
-                    "&page_size=5&sort_by=unique_scans_n"
-                )
-                data = _http_get(url)
-                for produkt in data.get("products", []):
-                    n    = produkt.get("nutriments", {})
-                    kcal = n.get("energy-kcal_100g") or (n.get("energy_100g", 0) or 0) / 4.184
-                    bialko = n.get("proteins_100g", 0) or 0
-                    wegl   = n.get("carbohydrates_100g", 0) or 0
-                    tl     = n.get("fat_100g", 0) or 0
-                    if kcal > 10 and (bialko + wegl + tl) > 0:
-                        makro = {
-                            "kcal": round(kcal), "bialko": round(bialko, 1),
-                            "weglowodany": round(wegl, 1), "tluszcze": round(tl, 1),
-                        }
-                        break
-            except Exception:
-                pass
-
-        wyniki.append({
-            "nazwa":            polska_nazwa,
-            "kcal_100g":        makro.get("kcal", 0),
-            "bialko_100g":      makro.get("bialko", 0),
-            "weglowodany_100g": makro.get("weglowodany", 0),
-            "tluszcze_100g":    makro.get("tluszcze", 0),
-        })
-
-    return Event(output=node_input, state={"baza_produktow": json.dumps(wyniki, ensure_ascii=False)})
