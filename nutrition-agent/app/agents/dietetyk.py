@@ -1,9 +1,13 @@
+import os
+
 from google.adk.agents import Agent
 from google.adk.models import Gemini
 from google.adk.tools.mcp_tool import McpToolset, StreamableHTTPConnectionParams
 from google.genai import types
 
 from ..models import PlanZywieniowy
+
+_MCP_OPENNUTRITION_URL = os.getenv("MCP_OPENNUTRITION_URL", "http://localhost:9113")
 
 INSTRUKCJA_DIETETYK = """
 Jesteś Agent-Dietetykiem — ekspertem żywienia w sporcie wytrzymałościowym.
@@ -142,7 +146,7 @@ Odpowiedz WYŁĄCZNIE poprawnym obiektem JSON — bez komentarzy, bez tekstu prz
 
 mcp_opennutrition = McpToolset(
     connection_params=StreamableHTTPConnectionParams(
-        url="http://localhost:9113",
+        url=_MCP_OPENNUTRITION_URL,
     ),
 )
 

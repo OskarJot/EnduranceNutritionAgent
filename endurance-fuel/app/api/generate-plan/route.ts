@@ -1,7 +1,7 @@
 import type { NextRequest } from 'next/server';
 import type { PlanZywieniowy, UserProfile } from '@/lib/types';
 
-const ADK_BASE = 'http://localhost:8080';
+const ADK_BASE = process.env.ADK_BASE_URL ?? 'http://localhost:8080';
 
 interface GenerateRequest {
   profile: UserProfile;

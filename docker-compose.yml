@@ -1,6 +1,41 @@
 services:
+
   mcp-opennutrition:
     image: deadletterq/mcp-opennutrition
     ports:
       - "9113:3000"
+    restart: unless-stopped
+
+  nutrition-agent:
+    build: ./nutrition-agent
+    command:
+      - uv
+      - run
+      - adk
+      - web
+      - "."
+      - --host
+      - "0.0.0.0"
+      - --port
+      - "8080"
+      - --allow_origins
+      - "*"
+    ports:
+      - "8080:8080"
+    env_file:
+      - ./nutrition-agent/app/.env
+    environment:
+      - MCP_OPENNUTRITION_URL=http://mcp-opennutrition:9113
+    depends_on:
+      - mcp-opennutrition
+    restart: unless-stopped
+
+  endurance-fuel:
+    build: ./endurance-fuel
+    ports:
+      - "3000:3000"
+    environment:
+      - ADK_BASE_URL=http://nutrition-agent:8080
+    depends_on:
+      - nutrition-agent
     restart: unless-stopped

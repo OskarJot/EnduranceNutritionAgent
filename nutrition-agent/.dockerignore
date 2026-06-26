@@ -1,0 +1,12 @@
+.venv
+__pycache__
+*.pyc
+.adk
+app/.env
+app/.env.*
+tests/
+testy/
+artifacts/
+.google-agents-cli/
+*.md
+.gitignore
